@@ -3,6 +3,7 @@
 const $ = id => document.getElementById(id);
 const canvas = $('game'), ctx = canvas.getContext('2d');
 const TILE = 64, WIDTH = 124, HEIGHT = 94, ZOOM = 1.15, SPEED = 5;
+const T = 64;
 const SCALE = { grass: .25, path: .25, water: .25 };
 const images = {}, patterns = {}, pressed = new Set();
 const player = { x: 17, y: 18, dir: 'down', moving: false };
