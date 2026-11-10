@@ -12,7 +12,7 @@ const H = 82;
 const ZOOM = 1.15;
 
 // Juster denne for storrelsen pa gresset
-const GRASS_SCALE = 0.3;
+const GRASS_SCALE = 0.25;
 
 const images = {};
 const keys = new Set();
