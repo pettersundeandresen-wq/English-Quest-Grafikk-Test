@@ -5,6 +5,7 @@ const T=64, W=112, H=82, ZOOM=1.15;
 const images={}, keys=new Set();
 let last=0,walkClock=0,joy={x:0,y:0},activePointer=null,noticeUntil=0;
 const player={x:18,y:19,dir:'down',moving:false};
+let ringStrength=0; // Smoothly increases when scenery hides the avatar.
 const files={
  oak:'assets/nature/tree_oak.png',spruce:'assets/nature/tree_spruce.png',birch:'assets/nature/tree_birch.png',blossom:'assets/nature/tree_blossom.png',bush:'assets/nature/bush_berries.png',rock:'assets/nature/rock_moss.png',house:'assets/buildings/house_cottage.png',chest:'assets/objects/chest_open.png'
 };
@@ -57,14 +58,49 @@ function draw(now){const dt=Math.min(.05,(now-last)/1000||0);last=now;const dx=(
  for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++)drawGround(x,y);
  const drawables=[];for(const o of nature)if(o.x>=x0-4&&o.x<x1+4&&o.y>=y0-4&&o.y<y1+4)drawables.push(o);
  drawables.push(house,...objects,{...player,type:'player'});drawables.sort((a,b)=>a.y-b.y);
+ // An object can obscure the avatar only when it is drawn after the player.
+ // Use a conservative visual footprint around the upper body, rather than
+ // making an entire tree transparent merely because it is nearby.
+ const avatarTop=player.y*T-88, avatarBottom=player.y*T-12;
+ const avatarLeft=player.x*T-25, avatarRight=player.x*T+25;
+ let hidden=false;
+ const playerIndex=drawables.findIndex(o=>o.type==='player');
+ for(let i=playerIndex+1;i<drawables.length;i++){
+   const o=drawables[i];
+   if(o.type==='chest')continue;
+   const X=o.x*T,Y=o.y*T;
+   let w,h,bottom;
+   if(o.type==='house'){w=410;h=295;bottom=Y+55}
+   else {const dims={oak:[235,215],birch:[218,230],spruce:[180,235],blossom:[220,220],bush:[106,79],rock:[124,83]}[o.type];if(!dims)continue;[w,h]=dims;bottom=Y}
+   const left=X-w*.43,right=X+w*.43,top=bottom-h*.91,low=bottom-h*.07;
+   const overlapX=Math.max(0,Math.min(avatarRight,right)-Math.max(avatarLeft,left));
+   const overlapY=Math.max(0,Math.min(avatarBottom,low)-Math.max(avatarTop,top));
+   if(overlapX>18&&overlapY>25){hidden=true;break}
+ }
+ ringStrength+=((hidden?1:0)-ringStrength)*Math.min(1,dt*9);
  for(const o of drawables){const X=o.x*T,Y=o.y*T;
  if(o.type==='player'){
- ctx.fillStyle='#1a4b4170';ctx.beginPath();ctx.ellipse(X,Y+3,18,7,0,0,7);ctx.fill();ctx.strokeStyle='#fff2a5';ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(X,Y,22,10,0,0,7);ctx.stroke();
+ ctx.fillStyle='#1a4b4170';ctx.beginPath();ctx.ellipse(X,Y+3,18,7,0,0,7);ctx.fill();
  const pose=!player.moving?'idle':Math.floor(walkClock*7)%2?'step_left':'step_right';drawAsset(`avatar_${player.dir}_${pose}`,X,Y,74,95);
- }else if(o.type==='house'){const w=410,h=295;const fade=player.y<o.y+1.1&&player.y>o.y-4&&Math.abs(player.x-o.x)<4.1;drawAsset('house',X,Y+55,w,h,fade?.25:1)}
+ }else if(o.type==='house'){const w=410,h=295;drawAsset('house',X,Y+55,w,h)}
  else if(o.type==='chest')drawAsset('chest',X,Y,110,82);
- else{const dims={oak:[235,215],birch:[218,230],spruce:[180,235],blossom:[220,220],bush:[106,79],rock:[124,83]}[o.type];const fade=player.y<o.y&&player.y>o.y-3.7&&Math.abs(player.x-o.x)<2.1;drawAsset(o.type,X,Y,dims[0],dims[1],fade?.24:1)}
+ else{const dims={oak:[235,215],birch:[218,230],spruce:[180,235],blossom:[220,220],bush:[106,79],rock:[124,83]}[o.type];drawAsset(o.type,X,Y,dims[0],dims[1])}
  }
+ // Draw the location ring LAST so it stays visible above every object.
+ // No transparency is applied to trees or buildings.
+ const PX=player.x*T,PY=player.y*T;
+ const pulse=(Math.sin(now*.005)+1)*.5;
+ ctx.save();
+ ctx.strokeStyle='#fff2b0';
+ ctx.lineWidth=2+ringStrength*(2.5+.6*pulse);
+ ctx.globalAlpha=.72+ringStrength*.28;
+ ctx.beginPath();ctx.ellipse(PX,PY,22+ringStrength*(3+pulse*2),10+ringStrength*(2+pulse),0,0,Math.PI*2);ctx.stroke();
+ if(ringStrength>.06){
+   ctx.globalAlpha=ringStrength*(.45+.15*pulse);
+   ctx.strokeStyle='#ffffff';ctx.lineWidth=1.6;
+   ctx.beginPath();ctx.ellipse(PX,PY,29+ringStrength*3,14+ringStrength*2,0,0,Math.PI*2);ctx.stroke();
+ }
+ ctx.restore();
  ctx.restore();document.getElementById('region').textContent=region();document.getElementById('position').textContent=`${Math.floor(player.x)}, ${Math.floor(player.y)}`;requestAnimationFrame(draw)
 }
 const dirs={arrowup:'up',w:'up',arrowdown:'down',s:'down',arrowleft:'left',a:'left',arrowright:'right',d:'right'};
