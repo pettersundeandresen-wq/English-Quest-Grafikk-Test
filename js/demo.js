@@ -1,5 +1,5 @@
 'use strict';
-// English Quest - World 2.0. Corrected graphics test.
+// English Quest - World 3.0: winding river, lake, tributaries and themed forests.
 const $ = id => document.getElementById(id);
 const canvas = $('game'), ctx = canvas.getContext('2d');
 const TILE = 64, WIDTH = 124, HEIGHT = 94, ZOOM = 1.15, SPEED = 5;
@@ -10,15 +10,16 @@ const stickState = { x: 0, y: 0 };
 let pointer = null, last = 0, steps = 0, ring = 0, hintTimer;
 const rand = (x,y,s=0) => { const v=Math.sin(x*127.1+y*311.7+s*47.9)*43758.5453; return v-Math.floor(v); };
 const distance = (a,b) => Math.hypot(a.x-b.x,a.y-b.y);
+// Six distinctive regions; tree species change by region.
 const zoneList = [
-  { name:'Blomsterlandsbyen', emoji:'🏡', x:0, end:31, tint:'#a3cb80' },
-  { name:'Den ville skogen', emoji:'🌲', x:31, end:52, tint:'#507d51' },
-  { name:'Elvedalen', emoji:'🌊', x:52, end:72, tint:'#84bd91' },
-  { name:'De gamle ruinene', emoji:'🪨', x:72, end:91, tint:'#9eaa82' },
-  { name:'Den magiske skogen', emoji:'✨', x:91, end:108, tint:'#8ea6a0' },
-  { name:'Slottsområdet', emoji:'🏰', x:108, end:124, tint:'#b9a7c9' }
+  {name:'Blomsterlandsbyen',emoji:'🏡',x:0,end:27,tint:'#b2d39c'},
+  {name:'Granskogen',emoji:'🌲',x:27,end:49,tint:'#527b57'},
+  {name:'Elvedalen',emoji:'🌊',x:49,end:74,tint:'#83bdac'},
+  {name:'Eikeskogen',emoji:'🌳',x:74,end:91,tint:'#769b65'},
+  {name:'Rosaskogen',emoji:'🌸',x:91,end:108,tint:'#d6abc4'},
+  {name:'Slottslandet',emoji:'🏰',x:108,end:124,tint:'#b7b5a2'}
 ];
-const zone = x => zoneList.find(z => x < z.end) || zoneList.at(-1);
+const zone = x => zoneList.find(z=>x<z.end)||zoneList[zoneList.length-1];
 const paths = {
   grass:'assets/terrain/grass_base.png', path:'assets/terrain/dirt_path.png', water:'assets/terrain/water_base.png',
   oak:'assets/nature/tree_oak.png', spruce:'assets/nature/tree_spruce.png', birch:'assets/nature/tree_birch.png',
@@ -49,39 +50,83 @@ function route(points,r=2.3,t='path') {
     for (let j=0;j<=n;j++) { const f=j/n; disk(ax+(bx-ax)*f,ay+(by-ay)*f,r,t); }
   }
 }
-const mainRoad = [[8,18],[17,18],[29,21],[39,28],[48,39],[58,43],[69,43],[79,48],[90,43],[99,37],[110,29],[117,27]];
-route(mainRoad,2.7);
+// Road network: continuous routes, with multiple forest shortcuts.
+const mainRoad=[[7,18],[18,20],[31,22],[40,30],[52,39],[63,43],[75,43],[88,42],[100,34],[116,25]];
+route(mainRoad,2.6);
 [
- [[16,18],[16,31],[31,37],[42,46],[48,39]],
- [[29,21],[37,13],[49,14],[58,26],[58,43]],
- [[39,28],[39,62],[56,71],[78,64],[90,43]],
- [[69,43],[78,25],[89,22],[99,37]],
- [[79,48],[84,74],[101,77],[113,61],[117,27]],
- [[99,37],[104,15],[116,14],[117,27]]
+ [[17,20],[17,38],[33,47],[47,49],[63,43]],
+ [[31,22],[36,11],[49,12],[60,24],[63,43]],
+ [[40,30],[40,68],[55,75],[76,73],[88,42]],
+ [[75,43],[80,24],[96,19],[100,34]],
+ [[88,42],[98,62],[113,70],[116,25]],
+ [[100,34],[108,12],[117,14],[116,25]],
+ [[74,73],[83,82],[100,83],[113,70]]
 ].forEach(p=>route(p,1.9));
-// A winding north-south river, with two clear crossings.
-for(let y=0;y<HEIGHT;y++) {
-  const center=61+3.8*Math.sin(y/10)+1.7*Math.sin(y/3.8);
-  for(let x=0;x<WIDTH;x++) if(Math.abs(x-center)<3.2) terrain[y][x]='water';
+
+// Keep road locations before painting water. A road crossing a stream
+// becomes a bridge rather than an impassable water tile.
+const roadMask=terrain.map(row=>row.map(t=>t==='path'));
+const waterMask=Array.from({length:HEIGHT},()=>Array(WIDTH).fill(false));
+function waterDisk(cx,cy,r) {
+  for(let y=Math.max(0,Math.floor(cy-r));y<=Math.min(HEIGHT-1,Math.ceil(cy+r));y++)
+    for(let x=Math.max(0,Math.floor(cx-r));x<=Math.min(WIDTH-1,Math.ceil(cx+r));x++)
+      if(Math.hypot(x-cx,y-cy)<=r) waterMask[y][x]=true;
 }
+function waterRoute(points,r=1) {
+  for(let i=1;i<points.length;i++) {
+    const [ax,ay]=points[i-1],[bx,by]=points[i];
+    const steps=Math.max(1,Math.ceil(Math.hypot(bx-ax,by-ay)*5));
+    for(let j=0;j<=steps;j++) {
+      const t=j/steps;
+      waterDisk(ax+(bx-ax)*t,ay+(by-ay)*t,r);
+    }
+  }
+}
+// Broad, winding north-south river, approximately 4-6 tiles wide.
+const riverX=y=>59+6*Math.sin(y/12)+3*Math.sin(y/5.1);
+for(let y=0;y<HEIGHT;y+=.35) waterDisk(riverX(y),y,2.5+0.45*Math.sin(y/9));
+
+// Large irregular lake in the south-east, connected by an inlet and outlet.
+const lakeX=91,lakeY=69;
+for(let y=lakeY-12;y<=lakeY+12;y++) {
+  const shape=Math.max(0,1-Math.pow((y-lakeY)/12.7,2));
+  const halfWidth=11.5*Math.sqrt(shape)*(1+0.07*Math.sin(y*1.2));
+  for(let x=Math.floor(lakeX-halfWidth-1);x<=Math.ceil(lakeX+halfWidth+1);x++)
+    if(Math.abs(x-lakeX+0.5*Math.sin(y/2))<=halfWidth) waterDisk(x,y,.65);
+}
+waterRoute([[riverX(57),57],[70,56],[77,61],[83,63],[lakeX-7,65]],.95);
+waterRoute([[lakeX-8,75],[79,79],[72,82],[riverX(86),86]],.85);
+
+// Smaller tributaries all join the river or lake, no isolated puddles.
+waterRoute([[4,8],[14,12],[25,17],[36,14],[49,20],[riverX(23),23]],.9);
+waterRoute([[115,5],[107,14],[98,20],[84,23],[72,30],[riverX(34),34]],.85);
+waterRoute([[6,78],[18,75],[29,79],[43,73],[riverX(72),72]],.8);
+waterRoute([[118,88],[109,85],[103,79],[99,76]],.7);
+waterRoute([[28,4],[32,9],[39,12]],.6);
+
+// Recreate roads as bridges only where they cross water.
 const bridges=[];
-for(const by of [43,70]) {
-  const bx=61+3.8*Math.sin(by/10)+1.7*Math.sin(by/3.8);
-  for(let y=by-2;y<=by+2;y++) for(let x=Math.floor(bx-5);x<=Math.ceil(bx+5);x++)
-    if(kind(x,y)==='water') { terrain[y][x]='bridge'; bridges.push({x,y}); }
+for(let y=0;y<HEIGHT;y++)for(let x=0;x<WIDTH;x++) {
+  if(!waterMask[y][x])continue;
+  terrain[y][x]=roadMask[y][x]?'bridge':'water';
+  if(terrain[y][x]==='bridge')bridges.push({x,y});
 }
-const buildings = [
- {type:'home',name:'Hjemmet',x:14,y:14,w:390,h:290,r:2.25},
- {type:'library',name:'Biblioteket',x:25,y:14,w:420,h:300,r:2.35},
- {type:'shop',name:'Butikken',x:12,y:29,w:410,h:310,r:2.3},
- {type:'school',name:'Skolen',x:29,y:29,w:430,h:320,r:2.4},
- {type:'wizard',name:'Magikertårnet',x:101,y:33,w:350,h:420,r:2.2},
- {type:'castle',name:'Eventyrslottet',x:116,y:24,w:570,h:440,r:3.1}
+
+// Six buildings spread across the world, with clear approach paths.
+const buildings=[
+ {type:'home',name:'Hjemmet',x:13,y:14,w:390,h:290,r:2.25},
+ {type:'library',name:'Biblioteket',x:25,y:34,w:420,h:300,r:2.35},
+ {type:'school',name:'Skolen',x:39,y:16,w:430,h:320,r:2.4},
+ {type:'wizard',name:'Magikertårnet',x:100,y:27,w:350,h:420,r:2.2},
+ {type:'shop',name:'Butikken',x:111,y:47,w:410,h:310,r:2.3},
+ {type:'castle',name:'Eventyrslottet',x:115,y:19,w:570,h:440,r:3.1}
 ];
-// Keep front doors approachable, and do not scatter nature in building yards.
 for(const b of buildings) {
-  disk(b.x,b.y+1.6,2.4,'path');
-  route([[b.x,b.y+1.6],[b.x,b.y+5.2]],1.35);
+  // Keep water out of the immediate building footprint.
+  for(let y=Math.max(0,b.y-3);y<=Math.min(HEIGHT-1,b.y+3);y++)
+    for(let x=Math.max(0,b.x-4);x<=Math.min(WIDTH-1,b.x+4);x++)
+      if(Math.hypot((x-b.x)*.8,y-b.y)<3.4) terrain[y][x]='grass';
+  route([[b.x,b.y+1.5],[b.x,b.y+5]],1.3);
 }
 const blockedByBuilding = (x,y) => buildings.some(b => Math.abs(x-b.x)<b.r && y>b.y-1.6 && y<b.y+.55);
 const inYard = (x,y) => buildings.some(b => Math.hypot((x-b.x)*.8,y-b.y)<b.r+3.4);
@@ -94,18 +139,18 @@ for(let y=3;y<HEIGHT-3;y+=2) for(let x=3;x<WIDTH-3;x+=2) {
   const q=rand(x,y,4), r=rand(x,y,5), z=zone(x).name;
   let type=null;
   if(z==='Blomsterlandsbyen') type=q>.87?(r>.55?'blossom':'birch'):q>.77?'bush':q>.73?'rock':null;
-  if(z==='Den ville skogen') type=q>.69?(r>.42?'spruce':'oak'):q>.61?'bush':q>.57?'rock':null;
-  if(z==='Elvedalen') type=q>.84?(r>.5?'birch':'oak'):q>.74?'bush':null;
-  if(z==='De gamle ruinene') type=q>.80?'rock':q>.75?'spruce':null;
-  if(z==='Den magiske skogen') type=q>.79?(r>.4?'blossom':'oak'):q>.68?'bush':null;
-  if(z==='Slottsområdet') type=q>.89?'blossom':q>.79?'birch':null;
+  if(z==='Granskogen') type=q>.68?'spruce':q>.60?'bush':q>.56?'rock':null;
+  if(z==='Elvedalen') type=q>.84?(r>.6?'birch':'oak'):q>.75?'bush':null;
+  if(z==='Eikeskogen') type=q>.72?'oak':q>.64?'bush':q>.60?'rock':null;
+  if(z==='Rosaskogen') type=q>.75?'blossom':q>.68?'bush':null;
+  if(z==='Slottslandet') type=q>.90?'birch':q>.82?'blossom':null;
   if(type) nature.push({type,x,y,...Object.fromEntries([['w',treeSizes[type][0]],['h',treeSizes[type][1]]])});
 }
 // Fixed quest sites near traversable routes; no tasks in water or building entrances.
-const sites = [
- [21,25],[9,37],[31,17],[36,34],[41,51],[47,18],[51,61],[54,34],
- [68,35],[70,51],[74,24],[79,60],[84,40],[88,68],[93,31],[96,55],
- [102,21],[104,66],[111,42],[117,50],[114,70],[25,47],[38,70],[77,76]
+const sites=[
+ [21,25],[9,37],[30,16],[36,34],[41,51],[46,18],[51,61],[54,34],
+ [68,35],[70,51],[76,24],[79,60],[84,40],[88,49],[93,31],[96,55],
+ [102,21],[104,80],[111,42],[117,52],[114,76],[25,53],[38,70],[77,86]
 ];
 function nearestSafe(x,y) {
   for(let radius=0;radius<12;radius++) for(let dy=-radius;dy<=radius;dy++) for(let dx=-radius;dx<=radius;dx++) {
@@ -122,8 +167,12 @@ sites.forEach(([x,y],i)=> {
   const p=nearestSafe(x,y), type=questTypes[i%questTypes.length];
   quests.push({...p,type,quest:true,id:i+1,status:statuses[i%statuses.length],name:type.replaceAll('_',' ')});
 });
+// Reserve clearings around quests: large trees must not hide their icons.
+for(let i=nature.length-1;i>=0;i--)
+  if(quests.some(q=>Math.hypot(nature[i].x-q.x,nature[i].y-q.y)<3.7))nature.splice(i,1);
+
 for(let y=2;y<HEIGHT-2;y++) for(let x=2;x<WIDTH-2;x++) {
-  if(inYard(x,y)||quests.some(q=>Math.hypot(q.x-x,q.y-y)<1.4)) continue;
+  if(inYard(x,y)||quests.some(q=>Math.hypot(q.x-x,q.y-y)<2.4)) continue;
   const t=kind(x,y), q=rand(x,y,18), r=rand(x,y,19), z=zone(x).name;
   let type=null, scale=.5;
   if(t==='water') { if(near(x,y,'grass',2)&&q>.975) type='water_lily'; }
@@ -131,9 +180,9 @@ for(let y=2;y<HEIGHT-2;y++) for(let x=2;x<WIDTH-2;x++) {
   else if(t==='path') { if(q>.987) {type='pebbles';scale=.35;} }
   else if(near(x,y,'water')) { if(q>.72) type=r>.3?'reeds':'pebbles'; }
   else if(near(x,y,'path')||near(x,y,'bridge')) { if(q>.82) type=r>.55?'grass_tuft':'pebbles'; }
-  else if(z==='Den ville skogen') { if(q>.86) type=r>.65?'fern':r>.35?'mushrooms':'fallen_leaves'; }
-  else if(z==='De gamle ruinene') { if(q>.88) type=r>.5?'pebbles':'dry_grass'; }
-  else if(z==='Den magiske skogen') { if(q>.88) type=r>.6?'magic_flowers':'pink_flowers'; }
+  else if(z==='Granskogen' || z==='Eikeskogen') { if(q>.86) type=r>.65?'fern':r>.35?'mushrooms':'fallen_leaves'; }
+  else if(z==='Slottslandet') { if(q>.88) type=r>.5?'pebbles':'dry_grass'; }
+  else if(z==='Rosaskogen') { if(q>.88) type=r>.6?'magic_flowers':'pink_flowers'; }
   else if(q>.91) type=r>.6?'daisies':r>.3?'pink_flowers':'grass_tuft';
   if(type && !nature.some(n=>Math.hypot(n.x-x,n.y-y)<1)) decorations.push({x:x+.25,y:y+.25,type:`detail_${type}`,detail:true,scale});
 }
@@ -167,7 +216,7 @@ async function loadAssets() {
     const c=tile.getContext('2d');c.imageSmoothingQuality='high';c.drawImage(img,0,0,tile.width,tile.height);
     patterns[type]=ctx.createPattern(tile,'repeat');
   }
-  if($('loadStatus')) $('loadStatus').textContent='Verden 2.0';
+  if($('loadStatus')) $('loadStatus').textContent='Verden 3.0';
 }
 function asset(type,x,y,w,h) { const img=images[type]; if(img?.naturalWidth) ctx.drawImage(img,x-w/2,y-h,w,h); }
 function ground(x0,y0,x1,y1,camx,camy,vw,vh) {
