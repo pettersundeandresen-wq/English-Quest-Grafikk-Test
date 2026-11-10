@@ -3,11 +3,12 @@ const canvas=document.getElementById('game');
 const ctx=canvas.getContext('2d');
 const T=64, W=112, H=82, ZOOM=1.15;
 const images={}, keys=new Set();
+let grassPattern=null;
 let last=0,walkClock=0,joy={x:0,y:0},activePointer=null,noticeUntil=0;
 const player={x:18,y:19,dir:'down',moving:false};
 let ringStrength=0; // Smoothly increases when scenery hides the avatar.
 const files={
- oak:'assets/nature/tree_oak.png',spruce:'assets/nature/tree_spruce.png',birch:'assets/nature/tree_birch.png',blossom:'assets/nature/tree_blossom.png',bush:'assets/nature/bush_berries.png',rock:'assets/nature/rock_moss.png',house:'assets/buildings/house_cottage.png',chest:'assets/objects/chest_open.png'
+ oak:'assets/nature/tree_oak.png',spruce:'assets/nature/tree_spruce.png',birch:'assets/nature/tree_birch.png',blossom:'assets/nature/tree_blossom.png',bush:'assets/nature/bush_berries.png',rock:'assets/nature/rock_moss.png',house:'assets/buildings/house_cottage.png',chest:'assets/objects/chest_open.png',grass_base:'assets/terrain/grass_base.png'
 };
 for(const dir of ['down','up','left','right'])for(const pose of ['idle','step_left','step_right'])files[`avatar_${dir}_${pose}`]=`assets/avatar/avatar_${dir}_${pose}.png`;
 const rand=(x,y,s=0)=>{const n=Math.sin(x*127.1+y*311.7+s*47.9)*43758.5453;return n-Math.floor(n)};
@@ -46,7 +47,7 @@ function walkable(x,y){if(x<1.2||y<1.2||x>W-1.2||y>H-1.2)return false;
 function loadAll(){const entries=Object.entries(files);let count=0;const status=document.getElementById('loadStatus');return Promise.all(entries.map(([key,url])=>new Promise(resolve=>{const im=new Image();images[key]=im;im.onload=()=>{count++;status.textContent=`Grafikk ${count}/${entries.length}`;resolve()};im.onerror=()=>{count++;console.warn('Kunne ikke laste',url);resolve()};im.src=url}))).then(()=>{status.textContent=`${entries.length} bildefiler kontrollert`;setTimeout(()=>status.textContent='Grafikkprototype',1600)})}
 function drawAsset(type,x,y,w,h,alpha=1){const im=images[type];if(!im?.complete||!im.naturalWidth)return;ctx.save();ctx.globalAlpha=alpha;ctx.drawImage(im,x-w/2,y-h,w,h);ctx.restore()}
 function region(){return player.x<36?'🏡 Landsbyen':player.x<66?'🌲 Den ville skogen':player.x<88?'🌿 Elvedalen':'🪨 Steinmarken'}
-function drawGround(x,y){const t=terrain[y][x].kind,X=x*T,Y=y*T;ctx.fillStyle=grass(x,y);ctx.fillRect(X,Y,T+1,T+1);
+function drawGround(x,y){const t=terrain[y][x].kind,X=x*T,Y=y*T;if(!images.grass_base?.naturalWidth){ctx.fillStyle=grass(x,y);ctx.fillRect(X,Y,T+1,T+1);}
  if(t==='water'){ctx.fillStyle='#4a9ab1';ctx.fillRect(X,Y,T+1,T+1);ctx.strokeStyle='#a3e0e4';ctx.globalAlpha=.45;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(X+8,Y+24);ctx.quadraticCurveTo(X+24,Y+19,X+39,Y+24);ctx.stroke();ctx.globalAlpha=1}
  else if(t==='path'||t==='bridge'){ctx.fillStyle=t==='bridge'?'#b58d59':'#d9bd87';ctx.fillRect(X,Y,T+1,T+1);if(t==='bridge'){ctx.strokeStyle='#795c39';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(X,Y+16);ctx.lineTo(X+T,Y+16);ctx.moveTo(X,Y+47);ctx.lineTo(X+T,Y+47);ctx.stroke()}}
  else{const r=rand(x,y,13);if(r>.77){ctx.fillStyle=r>.9?'#dbe9a7':'#75ab75';ctx.globalAlpha=.55;ctx.beginPath();ctx.arc(X+15+r*20,Y+22,2.3,0,7);ctx.fill();ctx.globalAlpha=1}}
@@ -55,6 +56,13 @@ function draw(now){const dt=Math.min(.05,(now-last)/1000||0);last=now;const dx=(
  if(player.moving){const ux=dx/Math.max(1,mag),uy=dy/Math.max(1,mag);player.dir=Math.abs(ux)>Math.abs(uy)?ux>0?'right':'left':uy>0?'down':'up';const speed=5.2;let nx=player.x+ux*dt*speed,ny=player.y+uy*dt*speed;if(walkable(nx,player.y))player.x=nx;if(walkable(player.x,ny))player.y=ny;walkClock+=dt}
  const vw=canvas.width,vh=canvas.height;let camx=player.x*T-vw/(2*ZOOM),camy=player.y*T-vh/(2*ZOOM);camx=Math.max(0,Math.min(W*T-vw/ZOOM,camx));camy=Math.max(0,Math.min(H*T-vh/ZOOM,camy));ctx.clearRect(0,0,vw,vh);ctx.save();ctx.scale(ZOOM,ZOOM);ctx.translate(-camx,-camy);
  const x0=Math.max(0,Math.floor(camx/T)-2),y0=Math.max(0,Math.floor(camy/T)-2),x1=Math.min(W,x0+Math.ceil(vw/ZOOM/T)+5),y1=Math.min(H,y0+Math.ceil(vh/ZOOM/T)+5);
+ // One world-anchored pattern prevents tile-sized grass blocks and camera drift.
+ const grassImage=images.grass_base;
+ if(grassImage?.naturalWidth){
+   if(!grassPattern)grassPattern=ctx.createPattern(grassImage,'repeat');
+   ctx.fillStyle=grassPattern;
+   ctx.fillRect(camx,camy,vw/ZOOM,vh/ZOOM);
+ }
  for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++)drawGround(x,y);
  const drawables=[];for(const o of nature)if(o.x>=x0-4&&o.x<x1+4&&o.y>=y0-4&&o.y<y1+4)drawables.push(o);
  drawables.push(house,...objects,{...player,type:'player'});drawables.sort((a,b)=>a.y-b.y);
