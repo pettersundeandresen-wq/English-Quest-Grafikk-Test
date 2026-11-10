@@ -1,9 +1,8 @@
 'use strict';
-// English Quest - World 2.0. Standalone graphics test.
+// English Quest - World 2.0. Corrected graphics test.
 const $ = id => document.getElementById(id);
 const canvas = $('game'), ctx = canvas.getContext('2d');
 const TILE = 64, WIDTH = 124, HEIGHT = 94, ZOOM = 1.15, SPEED = 5;
-const T = 64;
 const SCALE = { grass: .25, path: .25, water: .25 };
 const images = {}, patterns = {}, pressed = new Set();
 const player = { x: 17, y: 18, dir: 'down', moving: false };
@@ -176,11 +175,11 @@ function ground(x0,y0,x1,y1,camx,camy,vw,vh) {
   for(let y=y0;y<y1;y++) for(let x=x0;x<x1;x++) {
     const t=kind(x,y);if(t==='grass') continue;
     ctx.fillStyle=patterns[t==='bridge'?'path':t]||(t==='water'?'#2c91a9':'#c99c65');
-    ctx.fillRect(x*T,y*T,T+.2,T+.2);
+    ctx.fillRect(x*TILE,y*TILE,TILE+.2,TILE+.2);
   }
   // Gentle regional color atmosphere; transparent overlays do not change the base assets.
   for(const z of zoneList) {
-    const x=z.x*T, width=(z.end-z.x)*T;
+    const x=z.x*TILE, width=(z.end-z.x)*TILE;
     if(x+width<camx||x>camx+vw) continue;
     ctx.fillStyle=z.tint;ctx.globalAlpha=.055;ctx.fillRect(x,camy,width,vh);ctx.globalAlpha=1;
   }
@@ -190,11 +189,11 @@ const dims={
   quest_board:[122,120],magic_mushroom:[114,110],locked_gate:[155,143],star_altar:[138,136]
 };
 function hiddenBehind(list) {
-  const i=list.findIndex(o=>o.type==='player'), px=player.x*T,py=player.y*T;
+  const i=list.findIndex(o=>o.type==='player'), px=player.x*TILE,py=player.y*TILE;
   for(const o of list.slice(i+1)) {
     if(o.detail||o.quest) continue;
     const w=o.w,h=o.h;if(!w||!h) continue;
-    const X=o.x*T,Y=o.y*T+(o.building?48:0);
+    const X=o.x*TILE,Y=o.y*TILE+(o.building?48:0);
     const ox=Math.max(0,Math.min(px+25,X+w*.43)-Math.max(px-25,X-w*.43));
     const oy=Math.max(0,Math.min(py-12,Y-h*.07)-Math.max(py-88,Y-h*.91));
     if(ox>18&&oy>25) return true;
@@ -202,7 +201,7 @@ function hiddenBehind(list) {
   return false;
 }
 function drawRing(now) {
-  const x=player.x*T,y=player.y*T,p=(Math.sin(now*.005)+1)/2;
+  const x=player.x*TILE,y=player.y*TILE,p=(Math.sin(now*.005)+1)/2;
   ctx.save();ctx.strokeStyle='#fff1aa';ctx.globalAlpha=.8+ring*.2;ctx.lineWidth=2+ring*(2.5+.7*p);
   ctx.beginPath();ctx.ellipse(x,y,22+ring*(3+2*p),10+ring*(2+p),0,0,Math.PI*2);ctx.stroke();
   if(ring>.05) {ctx.globalAlpha=ring*(.45+.2*p);ctx.strokeStyle='white';ctx.lineWidth=1.7;
@@ -221,10 +220,10 @@ function render(now) {
     if(walkable(nx,player.y))player.x=nx;if(walkable(player.x,ny))player.y=ny;steps+=dt;
   }
   const vw=canvas.width,vh=canvas.height,viewW=vw/ZOOM,viewH=vh/ZOOM;
-  const camx=Math.max(0,Math.min(WIDTH*T-viewW,player.x*T-viewW/2));
-  const camy=Math.max(0,Math.min(HEIGHT*T-viewH,player.y*T-viewH/2));
-  const x0=Math.max(0,Math.floor(camx/T)-3),y0=Math.max(0,Math.floor(camy/T)-3);
-  const x1=Math.min(WIDTH,Math.ceil((camx+viewW)/T)+3),y1=Math.min(HEIGHT,Math.ceil((camy+viewH)/T)+3);
+  const camx=Math.max(0,Math.min(WIDTH*TILE-viewW,player.x*TILE-viewW/2));
+  const camy=Math.max(0,Math.min(HEIGHT*TILE-viewH,player.y*TILE-viewH/2));
+  const x0=Math.max(0,Math.floor(camx/TILE)-3),y0=Math.max(0,Math.floor(camy/TILE)-3);
+  const x1=Math.min(WIDTH,Math.ceil((camx+viewW)/TILE)+3),y1=Math.min(HEIGHT,Math.ceil((camy+viewH)/TILE)+3);
   ctx.clearRect(0,0,vw,vh);ctx.save();ctx.scale(ZOOM,ZOOM);ctx.translate(-camx,-camy);
   ground(x0,y0,x1,y1,camx,camy,viewW,viewH);
   const visible=o=>o.x>x0-6&&o.x<x1+6&&o.y>y0-7&&o.y<y1+7;
@@ -233,7 +232,7 @@ function render(now) {
   drawables.sort((a,b)=>a.y-b.y);
   ring+=(Number(hiddenBehind(drawables))-ring)*Math.min(1,dt*9);
   for(const o of drawables) {
-    const x=o.x*T,y=o.y*T;
+    const x=o.x*TILE,y=o.y*TILE;
     if(o.type==='player') {
       ctx.fillStyle='rgba(20,55,35,.25)';ctx.beginPath();ctx.ellipse(x,y+3,18,7,0,0,Math.PI*2);ctx.fill();
       const pose=player.moving?(Math.floor(steps*7)%2?'step_left':'step_right'):'idle';
